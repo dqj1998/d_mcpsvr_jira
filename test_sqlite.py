@@ -1,5 +1,6 @@
 import unittest
 from sqlite import *  # Import all functions and classes from sqlite.py
+import logging.handlers  # Import the handlers module to access RotatingFileHandler
 
 class TestSQLiteFeatures(unittest.TestCase):
 
@@ -66,6 +67,13 @@ class TestSQLiteFeatures(unittest.TestCase):
         self.assertEqual(len(result_json), 1)
         self.assertIn("TICKET-2", result_json[0]["ticket_id"])
 
+        # search for the finished ticket
+        result = search_tickets(project_name, "", "(status = 'In Progress')")  
+        #parse the result as JSON
+        result_json = json.loads(result)
+        self.assertEqual(len(result_json), 1)
+        self.assertIn("TICKET-2", result_json[0]["ticket_id"])
+
         # delete the project database
         result = del_project_db(project_name)
         self.assertIn("Succ", result)
@@ -80,13 +88,17 @@ if __name__ == "__main__":
         # Configure logging
         log_file_path = os.getenv("LOG_FILE_PATH", "project.log")
         log_format = os.getenv("LOG_FORMAT", "%(asctime)s - %(levelname)s - %(message)s")
+        log_file_size = int(os.getenv("LOG_FILE_SIZE", 10485760))  # Default to 10MB
+        backup_count = int(os.getenv("BCKUP_COUNT", 5))  # Default to 5 backups
 
         logging.basicConfig(
             level=getattr(logging, 'DEBUG', logging.DEBUG),
             format=log_format,
             handlers=[
-                logging.FileHandler(log_file_path),
-                logging.StreamHandler()
+                logging.handlers.RotatingFileHandler(  # Use logging.handlers to access RotatingFileHandler
+                    log_file_path, maxBytes=log_file_size, backupCount=backup_count
+                ),
+                logging.StreamHandler(),
             ]
         )
 

@@ -70,27 +70,35 @@ def search_tickets(project_name: str, prompt: str, conditions: str = "", top_n: 
         list: A list of tuples containing ticket_id, summary, and similarity score.
     """
     try:
-        prompt_vector = make_vector(prompt)
-        #vector_array = sqlite3.Binary(torch.tensor(prompt_vector).numpy().tobytes()) 
+        if (not prompt or prompt.strip() == "") and (not conditions or conditions.strip() == ""):
+            msg = "Err105: Prompt and conditions cannot be empty both."
+            logging.error(msg)
+            return msg
+        
+        prompt_vector_str = ""
+        if prompt and prompt.strip() !="":            
+            prompt_vector = make_vector(prompt)
+            prompt_vector_str = ", ".join(map(str, prompt_vector)) 
 
         conn = connect_db(project_name)
 
         vec_version, = conn.execute("select vec_version()").fetchone()
         logging.debug(f"sqlite_vec={vec_version}")
 
-        cursor = conn.cursor()
-
-        # Convert the prompt vector to a space-separated string
-        prompt_vector_str = ", ".join(map(str, prompt_vector))
+        cursor = conn.cursor()        
 
         # Query for the top N most similar tickets
         query = f"""
         SELECT ticket_id, summary, description, status, priority, assignee, reporter, created, updated, full_json, distance
         FROM jira_tickets
-        WHERE embedding match '[{prompt_vector_str}]'
+        WHERE 
         """
+        if prompt_vector_str and prompt_vector_str.strip() != "":
+            query += f" embedding match '[{prompt_vector_str}]' "
+        else:
+            query += f" 1=1 "
         if conditions and conditions.strip() != "":
-            query += f" AND {conditions}"
+            query += f" AND {conditions} "
         query += f"""
         ORDER BY distance ASC
         LIMIT {top_n};
@@ -264,5 +272,39 @@ def del_project_db(project_name: str):
         return msg
     else:
         msg = f"Err012: Database for project '{project_name}' does not exist at {db_path}"
+        logging.error(msg)
+        return msg
+    
+def create_test_db():
+    """
+    Create a test SQLite database for unit testing.
+    """
+    test_prj_name = os.getenv("TEST_PROJECT_NAME")
+    if not test_prj_name:
+        logging.info("TEST_PROJECT_NAME environment variable is not set. Skip test database creation.")
+        return
+    
+    test_db_name = f"{test_prj_name}.db"
+    db_dir = os.getenv("DB_DIR", "databases")
+    os.makedirs(db_dir, exist_ok=True)
+
+    db_path = os.path.join(db_dir, test_db_name)
+    if os.path.exists(db_path):
+        os.remove(db_path)
+
+    try:
+        # Initialize the database
+        init_project_db(test_prj_name)
+        
+        ticket_json = '{"ticket_id": "TICKET-1", "summary": "Test Ticket", "description": "This is a test ticket.", "status": "Open", "priority": "High", "reporter": "Marry", "assignee": "John Doe", "created": "2025-05-01", "updated": "2025-05-03"}'
+        result = add_ticket(test_prj_name, ticket_json)
+        ## add more tickets
+        ticket_json2 = '{"ticket_id": "TICKET-2", "summary": "Another Ticket", "description": "This is finished ticket.", "status": "In Progress", "priority": "Medium", "reporter": "Alice", "assignee": "Bob", "created": "2025-05-01", "updated": "2025-05-02"}'
+        result = add_ticket(test_prj_name, ticket_json2)
+        msg = f"Succ: Created Test database '{test_db_name}' initialized at {db_path}"
+        logging.info(msg)
+        return msg
+    except Exception as e:
+        msg = f"Err103: Error initializing test database: {e}"
         logging.error(msg)
         return msg

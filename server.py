@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 import logging
 from dotenv import load_dotenv
 
-from sqlite import del_project_db, init_project_db, search_tickets
+from sqlite import create_test_db, del_project_db, init_project_db, search_tickets
 
 # Load environment variables from .env file
 load_dotenv()
@@ -23,19 +23,26 @@ if not os.path.exists(log_file_path):
 
 # Configure logging
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+log_file_path = os.getenv("LOG_FILE_PATH", "project.log")
 log_format = os.getenv("LOG_FORMAT", "%(asctime)s - %(levelname)s - %(message)s")
+log_file_size = int(os.getenv("LOG_FILE_SIZE", 10485760))  # Default to 10MB
+backup_count = int(os.getenv("BCKUP_COUNT", 5))  # Default to 5 backups
 
 logging.basicConfig(
     level=getattr(logging, log_level, logging.INFO),
     format=log_format,
     handlers=[
-        logging.FileHandler(log_file_path, mode='a'),
-        logging.StreamHandler()
+        logging.handlers.RotatingFileHandler(  # Use logging.handlers to access RotatingFileHandler
+            log_file_path, maxBytes=log_file_size, backupCount=backup_count
+        ),
+        logging.StreamHandler(),
     ]
 )
 
 # Example log to verify setup
 logging.info("Logging is configured.")
+
+create_test_db()
 
 # Create server instance
 mcp = FastMCP("d_mcpsvr_jira")
@@ -46,9 +53,10 @@ def echo(message: str) -> str:
     return f"Echo from d_mcpsvr_jira: {message}"
 
 @mcp.tool()
-def search(prompt: str, conditions: str, top_n: int, resp_format: str) -> str:
+def search(project: str, prompt: str="", conditions: str="", top_n: int=5, resp_format: str="json") -> str:
     """JIRA search by Vector Search
     Args:
+        project (str): Project name
         prompt (str): prompt string
         conditions (str): SQL-like conditions for filtering
         top_n (int): Number of top results to return
@@ -56,7 +64,7 @@ def search(prompt: str, conditions: str, top_n: int, resp_format: str) -> str:
     Returns:
         str: Result of the prompt search
     """
-    result = search_tickets(prompt, conditions, top_n, resp_format)
+    result = search_tickets(project, prompt, conditions, top_n)
     if result.startswith("Err"):
         logging.error(f"Error in search: {result}")
         return result
