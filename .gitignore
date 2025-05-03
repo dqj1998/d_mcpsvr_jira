@@ -172,3 +172,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+#dqj
+.DS_Store
+myenv/
+# VS Code settings
+.vscode/
