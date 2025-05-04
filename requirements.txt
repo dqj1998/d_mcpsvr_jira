@@ -4,3 +4,5 @@ sqlite-vec
 torch
 transformers
 jira
+azure.identity
+openai

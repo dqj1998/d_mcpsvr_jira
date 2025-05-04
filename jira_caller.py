@@ -7,9 +7,8 @@ JIRA_USERNAME = os.getenv("JIRA_USER")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
 
 if not JIRA_SERVER or not JIRA_USERNAME or not JIRA_API_TOKEN:
-    msg = "Err107:JIRA_SERVER, JIRA_USERNAME, and JIRA_API_TOKEN must be set in environment variables."
-    logging.error(msg)
-    raise ValueError(msg)
+    msg = "WARN901:JIRA_SERVER, JIRA_USERNAME, and JIRA_API_TOKEN are not set in environment variables. Only can use local SQLite database."
+    logging.warning(msg)
 
 def get_jira_client():
     """
