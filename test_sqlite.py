@@ -1,7 +1,11 @@
 import unittest
-from sqlite import *  # Import all functions and classes from sqlite.py
-import logging.handlers  # Import the handlers module to access RotatingFileHandler
-
+import os
+from util import init_logger
+from sqlite import init_project_db, add_ticket, search_tickets, del_project_db, get_tickets_count
+import sqlite3
+import sqlite_vec
+import json
+import logging
 class TestSQLiteFeatures(unittest.TestCase):
 
     def test_db_flow(self):
@@ -15,6 +19,8 @@ class TestSQLiteFeatures(unittest.TestCase):
         db_path = os.path.join(db_dir, f"{project_name}.db")
         self.assertTrue(os.path.exists(db_path))
 
+        count = get_tickets_count(project_name)
+        self.assertEqual(count, 0)
         # add some tickets
         ticket_json = '{"ticket_id": "TICKET-1", "summary": "Test Ticket", "description": "This is a test ticket.", "status": "Open", "priority": "High", "reporter": "Marry", "assignee": "John Doe", "created": "2023-10-01", "updated": "2023-10-02"}'
         result = add_ticket(project_name, ticket_json)
@@ -25,6 +31,9 @@ class TestSQLiteFeatures(unittest.TestCase):
         result = add_ticket(project_name, ticket_json2)
         self.assertIn("Succ", result)
         self.assertIn("TICKET-2", result)
+
+        count = get_tickets_count(project_name)
+        self.assertEqual(count, 2)
 
         # Check if the ticket was added to the database
         conn = sqlite3.connect(db_path)
@@ -81,30 +90,12 @@ class TestSQLiteFeatures(unittest.TestCase):
 
 if __name__ == "__main__":
     try:
-        import os
-        from dotenv import load_dotenv
-        load_dotenv()
-
-        # Configure logging
-        log_file_path = os.getenv("LOG_FILE_PATH", "project.log")
-        log_format = os.getenv("LOG_FORMAT", "%(asctime)s - %(levelname)s - %(message)s")
-        log_file_size = int(os.getenv("LOG_FILE_SIZE", 10485760))  # Default to 10MB
-        backup_count = int(os.getenv("BCKUP_COUNT", 5))  # Default to 5 backups
-
-        logging.basicConfig(
-            level=getattr(logging, 'DEBUG', logging.DEBUG),
-            format=log_format,
-            handlers=[
-                logging.handlers.RotatingFileHandler(  # Use logging.handlers to access RotatingFileHandler
-                    log_file_path, maxBytes=log_file_size, backupCount=backup_count
-                ),
-                logging.StreamHandler(),
-            ]
-        )
-
-        try:
+       
+       init_logger()  # Initialize the logger
+        
+       try:
             unittest.main()
-        finally:
+       finally:
             db_dir = os.getenv("DB_DIR", "databases")
             db_path = os.path.join(db_dir, "test_project.db")
             if os.path.exists(db_path):

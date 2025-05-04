@@ -6,7 +6,8 @@ from mcp.server.fastmcp import FastMCP
 import logging
 from dotenv import load_dotenv
 
-from sqlite import create_test_db, del_project_db, init_project_db, search_tickets
+from sqlite import append_tickets, create_test_db, del_project_db, init_project_db, search_tickets
+from jira_caller import jql_query
 
 # Load environment variables from .env file
 load_dotenv()
@@ -26,7 +27,7 @@ log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 log_file_path = os.getenv("LOG_FILE_PATH", "project.log")
 log_format = os.getenv("LOG_FORMAT", "%(asctime)s - %(levelname)s - %(message)s")
 log_file_size = int(os.getenv("LOG_FILE_SIZE", 10485760))  # Default to 10MB
-backup_count = int(os.getenv("BCKUP_COUNT", 5))  # Default to 5 backups
+backup_count = int(os.getenv("LOG_BACKUP_COUNT", 5))  # Default to 5 backups
 
 logging.basicConfig(
     level=getattr(logging, log_level, logging.INFO),
@@ -96,10 +97,52 @@ def init_project(project_name: str) -> str:
     """
     rtn = init_project_db(project_name)
 
-    if rtn.startswith("Succ"):
-        logging.info(f"Project '{project_name}' initialized successfully.")
+    if rtn.startswith("Err"):
+        logging.error(rtn)
+        return rtn
 
-    return rtn
+    logging.info(f"Project '{project_name}' initialized successfully.")
+
+    jql = f"""
+    project = "{project_name}" AND 
+    (created >= -30d OR
+    status changed TO "In Progress" AFTER -30d OR
+    status changed TO "Done" AFTER -30d OR
+    status = "In Progress")
+    and type = Task ORDER BY due ASC
+    """
+
+    tickets = jql_query(jql)
+    logging.info(f"JQL query executed successfully: {jql}")
+
+    count = append_tickets(project_name, tickets)
+
+    msg = f"Succ: Init project DB of {project_name} and appended {count} tickets to the database."
+    logging.info(msg)
+    
+    return msg
+
+@mcp.tool()
+def load_tickets(project_name: str, jql: str) -> str:
+    """Load tickets from JIRA using a JQL query
+    Args:
+        jql (str): JQL query string
+    Returns:
+        str: Result of the JQL query
+    """
+    try:
+        issues = jql_query(jql)
+        if issues and len(issues) > 0:
+            logging.info(f"Loaded {len(issues)} tickets from JIRA.")
+            count = append_tickets(project_name, issues)
+            msg = f"Succ: Appended {count} tickets to the database."
+            logging.info(msg)
+            return msg
+        
+    except Exception as e:
+        msg = f"Err111: Failed to load tickets from JIRA: {e}"
+        logging.error(msg)
+        return msg
 
 @mcp.tool()
 def del_project(project_name: str) -> str:

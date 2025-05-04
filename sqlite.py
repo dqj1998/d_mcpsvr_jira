@@ -57,6 +57,28 @@ def init_project_db(project_name: str) -> str:
         logging.error(msg)
         return msg
 
+def get_tickets_count(project_name: str) -> int:
+    """
+    Get the count of tickets in the database.
+
+    Args:
+        project_name (str): The name of the project (database file).
+
+    Returns:
+        int: The count of tickets in the database.
+    """
+    try:
+        conn = connect_db(project_name)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM jira_tickets")
+        count, = cursor.fetchone()
+        conn.close()
+        return count
+    except Exception as e:
+        msg = f"Err113: Error getting ticket count from database for project '{project_name}': {e}"
+        logging.error(msg)
+        return 0
+
 def search_tickets(project_name: str, prompt: str, conditions: str = "", top_n: int = 5):
     """
     Search for tickets in the database using sqlite-vec for vector similarity.
@@ -157,7 +179,7 @@ def make_vector(prompt: str) -> list:
         logging.error(f"Err005: Failed to generate vector for prompt '{prompt}': {e}")
         return []
     
-def add_ticket(project_name: str, full_json: str):
+def add_ticket(project_name: str, ticket: any) -> str:
     """
     Add a new ticket to the database.
 
@@ -170,19 +192,27 @@ def add_ticket(project_name: str, full_json: str):
     """
 
     try:        
+        ticket_data = "{}"
+        # Check if the full_json is String
+        if isinstance(ticket, str):
+            ticket_data = json.loads(ticket)
+        else:
+            ticket_data = parse_issue_2_json(ticket)
+            
         # Parse the JSON to extract required fields
-        ticket_data = json.loads(full_json)
-        ticket_id = ticket_data.get("ticket_id")
+        ticket_id = ticket_data.get("key") if ticket_data.get("key") else ticket_data.get("ticket_id")
         summary = ticket_data.get("summary")
-        description = ticket_data.get("description")
-
-        if not ticket_id or not summary or not description:
-            msg = "Err008: Missing required fields (ticket_id, summary, description) in JSON."
+        
+        if not ticket_id or not summary:
+            msg = "Err008: Missing required fields (ticket_id, summary) in JSON."
             logging.error(msg)
             return msg
 
         # Generate vector from the description
-        vector = make_vector(description)
+        description = ticket_data.get("description", "")
+        if not description:
+            description = ""
+        vector = make_vector(description if description == "" else summary)
         
         # Convert the vector (list) to float[384] format
         if len(vector) != 384:
@@ -192,24 +222,28 @@ def add_ticket(project_name: str, full_json: str):
 
         vector_array = sqlite3.Binary(torch.tensor(vector).numpy().tobytes())    
 
-        conn = connect_db(project_name)
-        cursor = conn.cursor()        
-        cursor.execute('''
-            INSERT INTO jira_tickets (ticket_id, summary, description, status, priority, assignee, reporter, created, updated, full_json, embedding)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-        ''', (ticket_id, 
-              summary, 
-              description, 
-              ticket_data.get("status", ""),
-              ticket_data.get("priority", ""),
-              ticket_data.get("assignee", ""), 
-              ticket_data.get("reporter", ""), 
-              ticket_data.get("created", ""), 
-              ticket_data.get("updated", ""), 
-              full_json, 
-              vector_array))
-        conn.commit()
-        conn.close()
+        conn = None
+        try:
+            conn = connect_db(project_name)
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO jira_tickets (ticket_id, summary, description, status, priority, assignee, reporter, created, updated, full_json, embedding)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            ''', (ticket_id, 
+                  summary, 
+                  description or "",
+                  ticket_data.get("status", "") or "",
+                  ticket_data.get("priority", "") or "",
+                  ticket_data.get("assignee", "") or "", 
+                  ticket_data.get("reporter", "") or "", 
+                  ticket_data.get("created", "") or "", 
+                  ticket_data.get("updated", "") or "", 
+                  json.dumps(ticket_data) or "",  # Convert ticket_data to a JSON string
+                  vector_array))
+            conn.commit()
+        finally:
+            if conn:
+                conn.close()
         
         msg = f"Succ: Ticket '{ticket_id}' added to project '{project_name}'"
         logging.debug(msg)
@@ -222,6 +256,66 @@ def add_ticket(project_name: str, full_json: str):
         msg = f"Err007: Error adding ticket to database for project '{project_name}': {e}"
         logging.error(msg)
         return msg
+    
+def parse_issue_2_json(issue) -> str:
+    """
+    Convert a JIRA issue object to a JSON string.
+
+    Args:
+        issue: The JIRA issue object.
+
+    Returns:
+        str: The JSON string representation of the issue.
+    """
+    try:
+        # Convert issue to dictionary
+        issue_dict = {
+            'key': issue.key,
+            'summary': issue.fields.summary,
+            'description': issue.fields.description,
+            'status': issue.fields.status.name,
+            'assignee': issue.fields.assignee.displayName if issue.fields.assignee else None,
+            'reporter': issue.fields.reporter.displayName if issue.fields.reporter else None,
+            'created': issue.fields.created,
+            'updated': issue.fields.updated,
+            'priority': issue.fields.priority.name if issue.fields.priority else None,
+            'labels': issue.fields.labels,
+            'components': [comp.name for comp in issue.fields.components],
+            'issue_type': issue.fields.issuetype.name,
+            # Add more fields as needed
+        }
+        #issue_json = json.dumps(issue_dict, indent=4, ensure_ascii=False)
+        return issue_dict
+    
+    except Exception as e:
+        msg = f"Err110: Failed to convert issue to JSON: {e}"
+        logging.error(msg)
+        return ""
+
+def append_tickets(project_name: str, tickets: list) -> int:
+    """
+    Add multiple tickets to the database.
+
+    Args:
+        project_name (str): The name of the project (database file).
+        tickets (list): A list of ticket JSON strings.
+
+    Returns:
+        str: Success or error message.
+    """
+    if not tickets or len(tickets) == 0:
+        return 0
+    
+    count = 0
+    for ticket_json in tickets:
+        result = add_ticket(project_name, ticket_json)
+        if result.startswith("Err"):
+            logging.error(result)
+        else:
+            count += 1
+
+    return count
+
 
 def connect_db(project_name: str):
     """
@@ -277,7 +371,7 @@ def del_project_db(project_name: str):
     
 def create_test_db():
     """
-    Create a test SQLite database for unit testing.
+    Create a test SQLite database for API & unit testing.
     """
     test_prj_name = os.getenv("TEST_PROJECT_NAME")
     if not test_prj_name:

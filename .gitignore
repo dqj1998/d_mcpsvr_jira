@@ -178,4 +178,4 @@ cython_debug/
 myenv/
 # VS Code settings
 .vscode/
-databases/first_1998_test_project.db
+databases/*.db

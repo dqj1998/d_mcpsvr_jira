@@ -3,3 +3,4 @@ python-dotenv
 sqlite-vec
 torch
 transformers
+jira
