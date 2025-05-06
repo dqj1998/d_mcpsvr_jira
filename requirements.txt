@@ -6,3 +6,5 @@ transformers
 jira
 azure.identity
 openai
+fastmcp
+fastapi

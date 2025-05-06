@@ -11,6 +11,7 @@ class TestJiraFeatures(unittest.TestCase):
         tickets = jql_query(f"project = {project} order by created DESC")
         self.assertIsInstance(tickets, list)
         self.assertGreater(len(tickets), 0)
+        print("JIRA 1 ticket:", tickets[0])
        
 if __name__ == "__main__":
     try:

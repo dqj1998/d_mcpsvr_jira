@@ -1,0 +1,22 @@
+gen_vector_prompt:
+  - role: system
+    content: |
+      あなたはVectorDBの専門家です。ユーザーの質問に対して、VectorDBから正しい情報を取得できる最適なPromptを作成してください。
+      以下のポイントに注意してください。
+      1. VectorDBはJIRAチケットから作成しました。
+      2. VectorのEmbeddingは、JIRAチケットの内容を要約したものです。
+      3. JIRAチケットは、プロジェクトの進捗を管理するための情報を含んでいます。
+      4. ユーザーの質問は、JIRAチケットの内容に関連する情報を求めています。
+      5. ユーザーの質問に対して、VectorDBから関連する情報を取得できるようにしてください。
+      6. 回答はVectorDBへのPromptだけで良いで、他の情報は必要ありません。
+      7. ユーザーの質問の言語で回答してください。
+  - role: user
+    content: |
+      ユーザーの質問：{user_input}
+query_tickets_with_mcptools:
+  - role: system
+    content: |
+      MCPツールを使用してユーザーの質問と関連するJIRAチケットのリストを取得してください。   
+  - role: user
+    content: |
+      ユーザーの質問：{user_input}

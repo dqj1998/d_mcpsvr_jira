@@ -42,6 +42,8 @@ def init_project_db(project_name: str) -> str:
             reporter TEXT,
             created TEXT,
             updated TEXT,
+            original_estimate_seconds INT,
+            due_date TEXT,
             full_json TEXT,
             embedding float[384],
             );
@@ -111,7 +113,7 @@ def search_tickets(project_name: str, prompt: str, conditions: str = "", top_n: 
 
         # Query for the top N most similar tickets
         query = f"""
-        SELECT ticket_id, summary, description, status, priority, assignee, reporter, created, updated, full_json, distance
+        SELECT ticket_id, summary, description, status, priority, assignee, reporter, created, updated, original_estimate_seconds, due_date, full_json, distance
         FROM jira_tickets
         WHERE 
         """
@@ -140,8 +142,10 @@ def search_tickets(project_name: str, prompt: str, conditions: str = "", top_n: 
             "reporter": row[6],
             "created": row[7],
             "updated": row[8],
-            "full_json": row[9],
-            "distance": row[10]
+            "original_estimate_seconds": row[9],
+            "due_date": row[10],
+            "full_json": row[11],
+            "distance": row[12],
             }
             for row in results
         ]
@@ -212,7 +216,7 @@ def add_ticket(project_name: str, ticket: any) -> str:
         description = ticket_data.get("description", "")
         if not description:
             description = ""
-        vector = make_vector(description if description == "" else summary)
+        vector = make_vector(summary + ":" + description)
         
         # Convert the vector (list) to float[384] format
         if len(vector) != 384:
@@ -227,17 +231,18 @@ def add_ticket(project_name: str, ticket: any) -> str:
             conn = connect_db(project_name)
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO jira_tickets (ticket_id, summary, description, status, priority, assignee, reporter, created, updated, full_json, embedding)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-            ''', (ticket_id, 
-                  summary, 
-                  description or "",
-                  ticket_data.get("status", "") or "",
-                  ticket_data.get("priority", "") or "",
-                  ticket_data.get("assignee", "") or "", 
-                  ticket_data.get("reporter", "") or "", 
-                  ticket_data.get("created", "") or "", 
-                  ticket_data.get("updated", "") or "", 
+                INSERT INTO jira_tickets (ticket_id, summary, description, status, priority, assignee, reporter, created, updated, original_estimate_seconds, due_date, full_json, embedding)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (ticket_id, summary, 
+                    description or "",
+                    ticket_data.get("status", "") or "",
+                    ticket_data.get("priority", "") or "",
+                    ticket_data.get("assignee", "") or "", 
+                    ticket_data.get("reporter", "") or "", 
+                    ticket_data.get("created", "") or "", 
+                    ticket_data.get("updated", "") or "", 
+                    ticket_data.get("original_estimate_seconds", 0) or 0,
+                    ticket_data.get("due_date", "") or "",
                   json.dumps(ticket_data) or "",  # Convert ticket_data to a JSON string
                   vector_array))
             conn.commit()
@@ -384,7 +389,8 @@ def create_test_db():
 
     db_path = os.path.join(db_dir, test_db_name)
     if os.path.exists(db_path):
-        os.remove(db_path)
+        logging.info(f"Test database '{test_db_name}' already exists at {db_path}. Skip creation.")
+        return
 
     try:
         # Initialize the database

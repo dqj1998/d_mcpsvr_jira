@@ -1,16 +1,26 @@
 """
 d MCP server for JIRA implementation
 """
-import os
-from mcp.server.fastmcp import FastMCP
 import logging
+import os
+import json
+from fastapi import FastAPI
 from dotenv import load_dotenv
-
-from sqlite import append_tickets, create_test_db, del_project_db, init_project_db, search_tickets
-from jira_caller import jql_query
+from mcp.server.fastmcp import FastMCP
 
 # Load environment variables from .env file
 load_dotenv()
+
+from jira_caller import jql_query
+from sqlite import (
+    append_tickets,
+    create_test_db,
+    del_project_db,
+    init_project_db,
+    search_tickets,
+)
+
+
 
 # Ensure the logs directory exists
 log_file_path = os.getenv("LOG_FILE_PATH", "logs/mcpsvr_jira.log")
@@ -66,7 +76,7 @@ def search(project: str, prompt: str="", conditions: str="", top_n: int=5, resp_
         str: Result of the prompt search
     """
     result = search_tickets(project, prompt, conditions, top_n)
-    if result.startswith("Err"):
+    if result is str and result.startswith("Err"):
         logging.error(f"Error in search: {result}")
         return result
     logging.info(f"Search completed successfully: {result}")
@@ -75,8 +85,7 @@ def search(project: str, prompt: str="", conditions: str="", top_n: int=5, resp_
         return result
     elif resp_format == "readable":
         # Convert JSON to a readable format
-        try:
-            import json
+        try:            
             result_json = json.loads(result)
             readable_result = "\n".join([f"{item['ticket_id']}: {item['summary']}" for item in result_json])
             return readable_result
@@ -154,6 +163,11 @@ def del_project(project_name: str) -> str:
     """
     return del_project_db(project_name)
 
+#app = FastAPI()
+#app.mount("/", mcp.sse_app())
+
 # Main execution block (if run directly)
 if __name__ == "__main__":
     mcp.run()
+ 
+
