@@ -115,10 +115,10 @@ async def chat_loop():
 
         # Handle '!>xxxx' command to bypass gen_vector_prompt
         if user_input.startswith("!>"):
-            msg = {"role": "user", "content": user_input[2:]}
+            messages_for_ai = [{"role": "user", "content": user_input[2:]}]
             if cur_project:
-                msg.append({"role": "system", "content": "Current project is " + cur_project})
-            jira_results = await generate_response([msg], mcp_tools)
+                messages_for_ai.append({"role": "system", "content": "Current project is " + cur_project})
+            jira_results = await generate_response(messages_for_ai, mcp_tools)
         else:
             gen_vector_prompt_response = await gen_vector_prompt(user_input)
             new_prompts = replace_prompt("query_tickets_with_mcptools", "{user_input}", gen_vector_prompt_response)

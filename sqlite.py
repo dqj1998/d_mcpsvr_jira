@@ -81,7 +81,7 @@ def get_tickets_count(project_name: str) -> int:
         logging.error(msg)
         return 0
 
-def search_tickets(project_name: str, prompt: str, conditions: str = "", top_n: int = 5):
+def search_tickets(project_name: str, prompt: str, conditions: str = "", top_n: int = 5) -> str:
     """
     Search for tickets in the database using sqlite-vec for vector similarity.
 

@@ -29,6 +29,7 @@ def init_ai_caller():
 
 async def generate_response(messages: list, tools: Any = None) -> str:
     logging.debug(f"Tools: {tools}")
+    messages_for_processing = messages.copy()  # Operate on a copy to avoid modifying the caller's list
 
     if tools:
         available_tools = [{
@@ -40,7 +41,7 @@ async def generate_response(messages: list, tools: Any = None) -> str:
     else:
         available_tools = []
     response = ai_client.chat.completions.create(model="gpt-4o",
-        messages=messages,
+        messages=messages_for_processing,
         temperature=0.7,
         max_tokens=4000,
         top_p=0.95,
@@ -67,7 +68,7 @@ async def generate_response(messages: list, tools: Any = None) -> str:
                 logging.error(f"Error in tool call: {result}")
             elif isinstance(result, list) and len(result) > 0:
                 result_txt = result[0].text
-            messages.append({
+            messages_for_processing.append({
                 "role": "assistant",
                 "content": "Called tool",
                 "tool_calls": [
@@ -81,14 +82,14 @@ async def generate_response(messages: list, tools: Any = None) -> str:
                     }
                 ]
             })
-            messages.append({
+            messages_for_processing.append({
                 "tool_call_id": tool_call.id,
                 "role": "tool",
                 "name": tool_name,
                 "content": result_txt,
             })
         response = ai_client.chat.completions.create(model="gpt-4o",
-            messages=messages,
+            messages=messages_for_processing,
             tools=available_tools,
             tool_choice="auto",
         )
