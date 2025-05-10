@@ -23,7 +23,7 @@ def init_ai_caller():
     token_provider = get_bearer_token_provider(default_credential, "https://cognitiveservices.azure.com/.default")
 
     global ai_client
-    ai_client = AzureOpenAI(azure_endpoint="https://oai-common.peerworkerapp.net",
+    ai_client = AzureOpenAI(azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         azure_ad_token_provider=token_provider,
         api_version="2023-12-01-preview")
 
